@@ -66,14 +66,28 @@ def start(message):
 @bot.message_handler(commands=['help'])
 def help(message):
     chat_id = message.from_user.id
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.add(telebot.types.InlineKeyboardButton(
+        "/start - say hi to the bot", callback_data= "/start"))
+    keyboard.add(telebot.types.InlineKeyboardButton(
+        "/change_name - change your name in the bot's database", callback_data="/change_name"))
+    keyboard.add(telebot.types.InlineKeyboardButton(
+        "/delete - delete your data from the database.", callback_data="/delete"))
     text = "This bot is created for practice purpose.🧪\n" \
            "The bot is copying your text-messages (non-commands ones) and counts the total number of them.\n" \
-           "Available commands:\n" \
-           "/start - say hi to the bot,\n" \
-           "/change_name <new name> - change your name in the bot's database,\n" \
-           "/delete - delete your data from the database.\n"
-    bot.send_message(chat_id, text)
+           "Available commands:"
+    bot.send_message(chat_id, text, reply_markup=keyboard)
 
+@bot.callback_query_handler(func=lambda query: True)
+def callback(update, context):
+    print(update, context)
+    input = update.callback_query.data
+    if input == "/start":
+        start(update, context)
+    elif input == "/change_name":
+        change_name(update, context)
+    elif input == "/delete":
+        delete(update, context)
 
 @bot.message_handler(commands=['change_name'])
 def change_name(message):
@@ -162,9 +176,9 @@ def send_message(some_id, message):
 
 
 if __name__ == "__main__":
-    for chat_id in ids:
-        for key in dict:
-            schedule.every().day.at(key).do(send_message, chat_id, dict[key])
-
+    # for chat_id in ids:
+    #     for key in dict:
+    #         schedule.every().day.at(key).do(send_message, chat_id, dict[key])
+    #
     Thread(target=schedule_checker).start()
     bot.polling()
