@@ -1,15 +1,15 @@
-from datetime import datetime
-from threading import Thread
-from time import sleep
+# from datetime import datetime
+# from threading import Thread
+# from time import sleep
 
 import mysql.connector
-import schedule
+# import schedule
 import telebot
 
 import config
 
-now = datetime.now()
-current_time = now.strftime("%H:%M")
+# now = datetime.now()
+# current_time = now.strftime("%H:%M")
 
 dict = {"13:00": "Time for lunch!",
         "14:00": "Lunch is over.",
@@ -164,21 +164,21 @@ def default_command(message):
         conn.close()
 
 
-def schedule_checker():
-    while True:
-        schedule.run_pending()
-        sleep(1)
+# def schedule_checker():
+#     while True:
+#         schedule.run_pending()
+#         sleep(1)
 
 
 def send_message(some_id, message):
     print(some_id, message)
     return bot.send_message(some_id, message)
 
-
-if __name__ == "__main__":
-    # for chat_id in ids:
-    #     for key in dict:
-    #         schedule.every().day.at(key).do(send_message, chat_id, dict[key])
-    #
-    Thread(target=schedule_checker).start()
-    bot.polling()
+bot.polling()
+# if __name__ == "__main__":
+#     # for chat_id in ids:
+#     #     for key in dict:
+#     #         schedule.every().day.at(key).do(send_message, chat_id, dict[key])
+#     #
+#     Thread(target=schedule_checker).start()
+#     bot.polling()
