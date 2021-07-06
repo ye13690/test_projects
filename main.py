@@ -34,7 +34,7 @@ else:
     conn.close()
 
 bot = telebot.TeleBot(config.API_KEY)
-
+bot.state = None
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -94,6 +94,17 @@ def callback(update, context):
 @bot.message_handler(commands=['change_name'])
 def change_name(message):
     chat_id = message.from_user.id
+    bot.send_message(chat_id, "Send me your new name, please.\nP.S. you can /cancel this operation")
+    bot.state = "New name"
+
+@bot.message_handler(commands=['cancel'])
+def cancel(message):
+    chat_id = message.from_user.id
+    bot.send_message(chat_id, "Cancelled! Your name stays the same🙂")
+
+@bot.message_handler(func=lambda message: bot.state == "New name")
+def set_name(message):
+    chat_id = message.from_user.id
     try:
         conn = psycopg2.connect(
             host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
@@ -104,10 +115,7 @@ def change_name(message):
         query = f"SELECT name FROM users WHERE id={chat_id}"
         cursor.execute(query)
         old_name = [i for i in cursor][0][0]
-        new_name = message.text[len('/change_name'):].strip()
-        if not new_name:
-            bot.send_message(chat_id, f"Wrong usage! The correct one is:\n/change_name <new name>")
-            return
+        new_name = message.text.strip()
         query = "UPDATE users SET name=%s WHERE id=%s"
         cursor.execute(query, (new_name, chat_id))
         conn.commit()
