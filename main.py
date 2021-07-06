@@ -1,8 +1,8 @@
 # from datetime import datetime
 # from threading import Thread
 # from time import sleep
-
-import mysql.connector
+import psycopg2
+# import mysql.connector
 # import schedule
 import telebot
 
@@ -17,18 +17,19 @@ dict = {"13:00": "Time for lunch!",
 
 ids = []
 
-# get ids of all people in the db
+# get ids of all users in the db
 try:
-    conn = mysql.connector.connect(user=config.user,
-                                   password=config.password,
-                                   host=config.server,
-                                   database=config.database)
+    conn = psycopg2.connect(
+        host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
+        database="d7cevg37mv6gi1",
+        user="pjusxohbtpdfxj",
+        password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
     cursor = conn.cursor()
-    query = "SELECT id FROM People"
+    query = "SELECT id FROM users"
     cursor.execute(query)
     ids = [row[0] for row in cursor]
-except mysql.connector.Error as err:
-    print(err)
+except (Exception, psycopg2.DatabaseError) as error:
+    print(error)
 else:
     conn.close()
 
@@ -39,17 +40,18 @@ bot = telebot.TeleBot(config.API_KEY)
 def start(message):
     chat_id, name = message.from_user.id, message.from_user.first_name
     try:
-        conn = mysql.connector.connect(user=config.user,
-                                       password=config.password,
-                                       host=config.server,
-                                       database=config.database)
+        conn = psycopg2.connect(
+            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
+            database="d7cevg37mv6gi1",
+            user="pjusxohbtpdfxj",
+            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
         cursor = conn.cursor()
-        query = f"SELECT * FROM People WHERE id={chat_id}"
+        query = f"SELECT * FROM users WHERE id={chat_id}"
         cursor.execute(query)
         msg = cursor.fetchone()
         if not msg:
-            query = "INSERT INTO People(id, name) VALUES (%s, %s)"
-            cursor.execute(query, (chat_id, name))
+            query = "INSERT INTO users(id, name, username, admin) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (chat_id, name, message.from_user.username, 'f'))
             conn.commit()
             bot.send_message(chat_id, f"Hi, {name}👋\nI'm random bot, nice to meet you!")
             help(message)
@@ -57,8 +59,8 @@ def start(message):
             cursor.execute(query)
             data = [i for i in cursor]
             bot.send_message(chat_id, f"Hi, {data[0][1]}👋\nLong time no see.")
-    except mysql.connector.Error as err:
-        print(err)
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
     else:
         conn.close()
 
@@ -93,24 +95,25 @@ def callback(update, context):
 def change_name(message):
     chat_id = message.from_user.id
     try:
-        conn = mysql.connector.connect(user=config.user,
-                                       password=config.password,
-                                       host=config.server,
-                                       database=config.database)
+        conn = psycopg2.connect(
+            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
+            database="d7cevg37mv6gi1",
+            user="pjusxohbtpdfxj",
+            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
         cursor = conn.cursor()
-        query = f"SELECT name FROM People WHERE id={chat_id}"
+        query = f"SELECT name FROM users WHERE id={chat_id}"
         cursor.execute(query)
         old_name = [i for i in cursor][0][0]
         new_name = message.text[len('/change_name'):].strip()
         if not new_name:
             bot.send_message(chat_id, f"Wrong usage! The correct one is:\n/change_name <new name>")
             return
-        query = "UPDATE People SET name=%s WHERE id=%s"
+        query = "UPDATE users SET name=%s WHERE id=%s"
         cursor.execute(query, (new_name, chat_id))
         conn.commit()
         bot.send_message(chat_id, f"Your name was changed from {old_name} to {new_name}!")
-    except mysql.connector.Error as err:
-        print(err)
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
         bot.send_message(chat_id, f"Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
@@ -120,17 +123,18 @@ def change_name(message):
 def delete(message):
     chat_id = message.from_user.id
     try:
-        conn = mysql.connector.connect(user=config.user,
-                                       password=config.password,
-                                       host=config.server,
-                                       database=config.database)
+        conn = psycopg2.connect(
+            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
+            database="d7cevg37mv6gi1",
+            user="pjusxohbtpdfxj",
+            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
         cursor = conn.cursor()
-        query = f"DELETE FROM People WHERE id={chat_id}"
+        query = f"DELETE FROM users WHERE id={chat_id}"
         cursor.execute(query)
         conn.commit()
         bot.send_message(chat_id, f"Your info was deleted from the database😐\nNow I don't know you.")
-    except mysql.connector.Error as err:
-        print(err)
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
         bot.send_message(chat_id, f"Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
@@ -141,15 +145,16 @@ def delete(message):
 def default_command(message):
     chat_id = message.from_user.id
     try:
-        conn = mysql.connector.connect(user=config.user,
-                                       password=config.password,
-                                       host=config.server,
-                                       database=config.database)
+        conn = psycopg2.connect(
+            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
+            database="d7cevg37mv6gi1",
+            user="pjusxohbtpdfxj",
+            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
         cursor = conn.cursor()
-        query = f"UPDATE People SET count = count + 1 WHERE id={chat_id}"
+        query = f"UPDATE users SET count = count + 1 WHERE id={chat_id}"
         cursor.execute(query)
         conn.commit()
-        query = f"SELECT count FROM People WHERE id={chat_id}"
+        query = f"SELECT count FROM users WHERE id={chat_id}"
         cursor.execute(query)
         count = [i for i in cursor][0]
         if message.content_type == 'text':
@@ -157,8 +162,8 @@ def default_command(message):
         else:
             bot.send_message(chat_id,
                              f"I can't send your {message.content_type} back, but I'll count it in!\n✉{count[0]} messages")
-    except mysql.connector.Error as err:
-        print(err)
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
         bot.send_message(chat_id, f"Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
