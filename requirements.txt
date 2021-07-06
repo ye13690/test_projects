@@ -5,13 +5,12 @@ chardet==4.0.0
 idna==2.10
 mysql-connector-python==8.0.18
 protobuf==3.6.0
-psycopg2 @ file:///tmp/build/80754af9/psycopg2_1612298578530/work
+psycopg2==2.8.6
 pyTelegramBotAPI==3.8.1
 python-telegram-bot==13.7
 pytz==2021.1
 requests==2.25.1
 schedule==1.1.0
-six @ file:///tmp/build/80754af9/six_1623709665295/work
 tornado==6.1
 tzlocal==2.1
 urllib3==1.26.6
