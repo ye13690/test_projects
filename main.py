@@ -196,7 +196,7 @@ def webhook():
     bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
     return "?", 200
 
-server.run(host='0.0.0.0', port=os.environ.get('PORT', 8443))
+server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
 
 # else:
 #     bot.remove_webhook()
