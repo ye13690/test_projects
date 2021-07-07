@@ -1,6 +1,8 @@
 import logging
 import os
 
+# connected hobby-dev plan (10 000 rows)
+# to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
 import telebot
 from flask import Flask, request
@@ -15,10 +17,10 @@ ids = []
 # get ids of all users in the db
 try:
     conn = psycopg2.connect(
-        host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
-        database="d7cevg37mv6gi1",
-        user="pjusxohbtpdfxj",
-        password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
+        host=config.HOST,
+        database=config.DATABASE,
+        user=config.USER,
+        password=config.PASSWORD)
     cursor = conn.cursor()
     query = "SELECT id FROM users"
     cursor.execute(query)
@@ -37,10 +39,10 @@ def start(message):
     chat_id, name = message.from_user.id, message.from_user.first_name
     try:
         conn = psycopg2.connect(
-            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
-            database="d7cevg37mv6gi1",
-            user="pjusxohbtpdfxj",
-            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
+            host=config.HOST,
+            database=config.DATABASE,
+            user=config.USER,
+            password=config.PASSWORD)
         cursor = conn.cursor()
         query = f"SELECT * FROM users WHERE id={chat_id}"
         cursor.execute(query)
@@ -107,10 +109,10 @@ def set_name(message):
     chat_id = message.from_user.id
     try:
         conn = psycopg2.connect(
-            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
-            database="d7cevg37mv6gi1",
-            user="pjusxohbtpdfxj",
-            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
+            host=config.HOST,
+            database=config.DATABASE,
+            user=config.USER,
+            password=config.PASSWORD)
         cursor = conn.cursor()
         query = f"SELECT name FROM users WHERE id={chat_id}"
         cursor.execute(query)
@@ -132,10 +134,10 @@ def delete(message):
     chat_id = message.from_user.id
     try:
         conn = psycopg2.connect(
-            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
-            database="d7cevg37mv6gi1",
-            user="pjusxohbtpdfxj",
-            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
+            host=config.HOST,
+            database=config.DATABASE,
+            user=config.USER,
+            password=config.PASSWORD)
         cursor = conn.cursor()
         query = f"DELETE FROM users WHERE id={chat_id}"
         cursor.execute(query)
@@ -154,10 +156,10 @@ def default_command(message):
     chat_id = message.from_user.id
     try:
         conn = psycopg2.connect(
-            host="ec2-34-242-89-204.eu-west-1.compute.amazonaws.com",
-            database="d7cevg37mv6gi1",
-            user="pjusxohbtpdfxj",
-            password="0b4da611f6e516b06bd6e1f3dc4fefbb1ba047761e7662c4820936db93029b0e")
+            host=config.HOST,
+            database=config.DATABASE,
+            user=config.USER,
+            password=config.PASSWORD)
         cursor = conn.cursor()
         query = f"UPDATE users SET count = count + 1 WHERE id={chat_id}"
         cursor.execute(query)
@@ -177,18 +179,17 @@ def default_command(message):
         conn.close()
 
 
-# bot.set_webhook(url='https://telegrambotproject7.herokuapp.com/')
-
-# if "HEROKU" in list(os.environ.keys()):
 logger = telebot.logger
 telebot.logger.setLevel(logging.INFO)
 
 server = Flask(__name__)
 
+
 @server.route(f'/{config.API_KEY}', methods=['POST'])
 def getMessage():
     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
     return "!", 200
+
 
 @server.route('/')
 def webhook():
@@ -196,32 +197,5 @@ def webhook():
     bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
     return "?", 200
 
+
 server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
-
-# else:
-#     bot.remove_webhook()
-#     bot.polling(none_stop=True)
-#
-#
-
-
-# if __name__ == "__main__":
-#     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
-# def schedule_checker():
-#     while True:
-#         schedule.run_pending()
-#         sleep(1)
-
-
-# def send_message(some_id, message):
-#     print(some_id, message)
-#     return bot.send_message(some_id, message)
-
-# bot.polling()
-# if __name__ == "__main__":
-#     # for chat_id in ids:
-#     #     for key in dict:
-#     #         schedule.every().day.at(key).do(send_message, chat_id, dict[key])
-#     #
-#     Thread(target=schedule_checker).start()
-#     bot.polling()
