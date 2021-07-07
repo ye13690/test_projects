@@ -1,19 +1,14 @@
-# from datetime import datetime
-# from threading import Thread
-# from time import sleep
+import logging
+import os
+
 import psycopg2
-# import mysql.connector
-# import schedule
 import telebot
+from flask import Flask, request
 
 import config
 
 # now = datetime.now()
 # current_time = now.strftime("%H:%M")
-
-dict = {"13:00": "Time for lunch!",
-        "14:00": "Lunch is over.",
-        "18:00": "Working day is over!"}
 
 ids = []
 
@@ -35,6 +30,7 @@ else:
 
 bot = telebot.TeleBot(config.API_KEY)
 bot.state = None
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -70,7 +66,7 @@ def help(message):
     chat_id = message.from_user.id
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(telebot.types.InlineKeyboardButton(
-        "/start - say hi to the bot", callback_data= "/start"))
+        "/start - say hi to the bot", callback_data="/start"))
     keyboard.add(telebot.types.InlineKeyboardButton(
         "/change_name - change your name in the bot's database", callback_data="/change_name"))
     keyboard.add(telebot.types.InlineKeyboardButton(
@@ -79,6 +75,7 @@ def help(message):
            "The bot is copying your text-messages (non-commands ones) and counts the total number of them.\n" \
            "Available commands:"
     bot.send_message(chat_id, text, reply_markup=keyboard)
+
 
 @bot.callback_query_handler(func=lambda query: True)
 def callback(update, context):
@@ -91,16 +88,19 @@ def callback(update, context):
     elif input == "/delete":
         delete(update, context)
 
+
 @bot.message_handler(commands=['change_name'])
 def change_name(message):
     chat_id = message.from_user.id
     bot.send_message(chat_id, "Send me your new name, please.\nP.S. you can /cancel this operation")
     bot.state = "New name"
 
+
 @bot.message_handler(commands=['cancel'])
 def cancel(message):
     chat_id = message.from_user.id
     bot.send_message(chat_id, "Cancelled! Your name stays the same🙂")
+
 
 @bot.message_handler(func=lambda message: bot.state == "New name")
 def set_name(message):
@@ -177,17 +177,47 @@ def default_command(message):
         conn.close()
 
 
+# bot.set_webhook(url='https://telegrambotproject7.herokuapp.com/')
+
+# if "HEROKU" in list(os.environ.keys()):
+logger = telebot.logger
+telebot.logger.setLevel(logging.INFO)
+
+server = Flask(__name__)
+
+@server.route(f'/{config.API_KEY}', methods=['POST'])
+def getMessage():
+    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    return "!", 200
+
+@server.route('/')
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
+    return "?", 200
+
+server.run(host='0.0.0.0', port=os.environ.get('PORT', 8443))
+
+# else:
+#     bot.remove_webhook()
+#     bot.polling(none_stop=True)
+#
+#
+
+
+# if __name__ == "__main__":
+#     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
 # def schedule_checker():
 #     while True:
 #         schedule.run_pending()
 #         sleep(1)
 
 
-def send_message(some_id, message):
-    print(some_id, message)
-    return bot.send_message(some_id, message)
+# def send_message(some_id, message):
+#     print(some_id, message)
+#     return bot.send_message(some_id, message)
 
-bot.polling()
+# bot.polling()
 # if __name__ == "__main__":
 #     # for chat_id in ids:
 #     #     for key in dict:
