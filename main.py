@@ -1,7 +1,8 @@
+from datetime import datetime
 import logging
 import os
 
-# connected hobby-dev plan (10 000 rows)
+# heroku database connected to hobby-dev plan (10 000 rows)
 # to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
 import telebot
@@ -9,26 +10,23 @@ from flask import Flask, request
 
 import config
 
-# now = datetime.now()
-# current_time = now.strftime("%H:%M")
-
-ids = []
-
-# get ids of all users in the db
-try:
-    conn = psycopg2.connect(
-        host=config.HOST,
-        database=config.DATABASE,
-        user=config.USER,
-        password=config.PASSWORD)
-    cursor = conn.cursor()
-    query = "SELECT id FROM users"
-    cursor.execute(query)
-    ids = [row[0] for row in cursor]
-except (Exception, psycopg2.DatabaseError) as error:
-    print(error)
-else:
-    conn.close()
+# ids = []
+#
+# # get ids of all users in the db
+# try:
+#     conn = psycopg2.connect(
+#         host=config.HOST,
+#         database=config.DATABASE,
+#         user=config.USER,
+#         password=config.PASSWORD)
+#     cursor = conn.cursor()
+#     query = "SELECT id FROM users"
+#     cursor.execute(query)
+#     ids = [row[0] for row in cursor]
+# except (Exception, psycopg2.DatabaseError) as error:
+#     print(error)
+# else:
+#     conn.close()
 
 bot = telebot.TeleBot(config.API_KEY)
 bot.state = None
@@ -94,8 +92,20 @@ def callback(update, context):
 @bot.message_handler(commands=['change_name'])
 def change_name(message):
     chat_id = message.from_user.id
-    bot.send_message(chat_id, "Send me your new name, please.\nP.S. you can /cancel this operation")
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('Cancel', callback_data='cancel'))
+    bot.send_message(chat_id, "Send me your new name, please.", reply_markup=keyboard)
     bot.state = "New name"
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "cancel":
+        bot.answer_callback_query(call.id, "Canceled!")
+        bot.send_message(call.id, "Cancelled! Your name stays the same🙂")
+
+    # elif call.data == "cb_no":
+    #     bot.answer_callback_query(call.id, "Answer is No")
 
 
 @bot.message_handler(commands=['cancel'])
@@ -198,4 +208,7 @@ def webhook():
     return "?", 200
 
 
-server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+if __name__ == "__main__":
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
