@@ -10,24 +10,6 @@ from flask import Flask, request
 
 import config
 
-# ids = []
-#
-# # get ids of all users in the db
-# try:
-#     conn = psycopg2.connect(
-#         host=config.HOST,
-#         database=config.DATABASE,
-#         user=config.USER,
-#         password=config.PASSWORD)
-#     cursor = conn.cursor()
-#     query = "SELECT id FROM users"
-#     cursor.execute(query)
-#     ids = [row[0] for row in cursor]
-# except (Exception, psycopg2.DatabaseError) as error:
-#     print(error)
-# else:
-#     conn.close()
-
 bot = telebot.TeleBot(config.API_KEY)
 bot.state = None
 
@@ -51,6 +33,10 @@ def start(message):
             conn.commit()
             bot.send_message(chat_id, f"Hi, {name}👋\nI'm random bot, nice to meet you!")
             help(message)
+            cursor.execute('SELECT id FROM users WHERE admin=TRUE')
+            rows = cursor.fetchall()
+            for row in rows:
+                bot.send_message(row[0], f"New user!\nid: {chat_id}\nname: {name}")
         else:
             cursor.execute(query)
             data = [i for i in cursor]
@@ -66,52 +52,48 @@ def help(message):
     chat_id = message.from_user.id
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(telebot.types.InlineKeyboardButton(
-        "/start - say hi to the bot", callback_data="/start"))
+        "/start - say hi to the bot", callback_data="start"))
     keyboard.add(telebot.types.InlineKeyboardButton(
-        "/change_name - change your name in the bot's database", callback_data="/change_name"))
+        "/change_name - change your name in the bot's database", callback_data="change_name"))
     keyboard.add(telebot.types.InlineKeyboardButton(
-        "/delete - delete your data from the database.", callback_data="/delete"))
+        "/delete - delete your data from the database.", callback_data="delete"))
     text = "This bot is created for practice purpose.🧪\n" \
-           "The bot is copying your text-messages (non-commands ones) and counts the total number of them.\n" \
            "Available commands:"
     bot.send_message(chat_id, text, reply_markup=keyboard)
 
 
-@bot.callback_query_handler(func=lambda query: True)
-def callback(update, context):
-    print(update, context)
-    input = update.callback_query.data
-    if input == "/start":
-        start(update, context)
-    elif input == "/change_name":
-        change_name(update, context)
-    elif input == "/delete":
-        delete(update, context)
+@bot.callback_query_handler(func=lambda call: call.data in ['start', 'change_name', 'delete'])
+def callback_help(call):
+    if call.message:
+        if call.data == "start":
+            start(call)
+            bot.answer_callback_query(callback_query_id=call.id, show_alert=False)
+        elif call.data == "change_name":
+            change_name(call)
+            bot.answer_callback_query(callback_query_id=call.id, show_alert=False)
+        elif call.data == "delete":
+            bot.answer_callback_query(callback_query_id=call.id, show_alert=False)
+            delete(call)
 
 
 @bot.message_handler(commands=['change_name'])
 def change_name(message):
-    chat_id = message.from_user.id
     keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.row(
+    keyboard.add(
         telebot.types.InlineKeyboardButton('Cancel', callback_data='cancel'))
-    bot.send_message(chat_id, "Send me your new name, please.", reply_markup=keyboard)
+    bot.send_message(message.from_user.id, "Send me your new name, please.", reply_markup=keyboard)
     bot.state = "New name"
 
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    if call.data == "cancel":
-        bot.answer_callback_query(call.id, "Canceled!")
-        bot.send_message(call.id, "Cancelled! Your name stays the same🙂")
 
-    # elif call.data == "cb_no":
-    #     bot.answer_callback_query(call.id, "Answer is No")
-
-
-@bot.message_handler(commands=['cancel'])
-def cancel(message):
-    chat_id = message.from_user.id
-    bot.send_message(chat_id, "Cancelled! Your name stays the same🙂")
+@bot.callback_query_handler(func=lambda call: call.data in 'cancel')
+def callback_cancel_name_change(call):
+    if call.message:
+        bot.state = "Cancelled"
+        if call.data == "cancel":
+            text = "Cancelled! Your name stays the same🙂"
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text)
+            bot.answer_callback_query(callback_query_id=call.id, show_alert=False, text="Cancelled!")
+            bot.state = None
 
 
 @bot.message_handler(func=lambda message: bot.state == "New name")
@@ -132,6 +114,7 @@ def set_name(message):
         cursor.execute(query, (new_name, chat_id))
         conn.commit()
         bot.send_message(chat_id, f"Your name was changed from {old_name} to {new_name}!")
+        bot.state = None
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.send_message(chat_id, f"Oops! I encountered some error.\nTry again later🙃")
@@ -211,4 +194,5 @@ def webhook():
 if __name__ == "__main__":
     now = datetime.now()
     current_time = now.strftime("%H:%M")
+    # bot.polling(none_stop=True)
     server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
