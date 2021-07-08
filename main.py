@@ -1,9 +1,9 @@
-import re
-import time
-from datetime import datetime
 import logging
 import os
+import time
+from datetime import datetime
 from functools import wraps
+
 # heroku database connected to hobby-dev plan (10 000 rows)
 # to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
@@ -15,18 +15,18 @@ import config
 bot = telebot.TeleBot(config.API_KEY)
 
 BUTTONS = {
-    'btn_start' : telebot.types.KeyboardButton("say hi to the bot"),
-    'btn_change_name' : telebot.types.KeyboardButton("change your name"),
-    'btn_show_all_notif' : telebot.types.KeyboardButton('show all notifications'),
-    'btn_new_notif' : telebot.types.KeyboardButton("new 🗒"),
-    'btn_redact_notif' : telebot.types.KeyboardButton("redact 🗒"),
-    'btn_delete_notif' : telebot.types.KeyboardButton("delete 🗒"),
-    'btn_delete' : telebot.types.KeyboardButton("delete your data from the database"),
+    'btn_start': telebot.types.KeyboardButton("say hi to the bot"),
+    'btn_change_name': telebot.types.KeyboardButton("change your name"),
+    'btn_show_all_notif': telebot.types.KeyboardButton('show all notifications'),
+    'btn_new_notif': telebot.types.KeyboardButton("new 🗒"),
+    'btn_redact_notif': telebot.types.KeyboardButton("redact 🗒"),
+    'btn_delete_notif': telebot.types.KeyboardButton("delete 🗒"),
+    'btn_delete': telebot.types.KeyboardButton("delete your data from the database"),
     'help': telebot.types.KeyboardButton("help"),
-    'btn_all_users' : telebot.types.KeyboardButton("show all users"),
-    'btn_set_new_admin' : telebot.types.KeyboardButton("set user as admin"),
-    'btn_demote_from_admin' : telebot.types.KeyboardButton("demote user from admin"),
-    'btn_block_user' : telebot.types.KeyboardButton("block user")
+    'btn_all_users': telebot.types.KeyboardButton("show all users"),
+    'btn_set_new_admin': telebot.types.KeyboardButton("set user as admin"),
+    'btn_demote_from_admin': telebot.types.KeyboardButton("demote user from admin"),
+    'btn_block_user': telebot.types.KeyboardButton("block user")
 }
 
 hide_keyboard = telebot.types.ReplyKeyboardRemove()
@@ -37,6 +37,7 @@ user_keyboard.row(BUTTONS['help']).row(BUTTONS['btn_delete'])
 admin_keyboard = user_keyboard
 admin_keyboard.row(BUTTONS['btn_all_users']).row(BUTTONS['btn_set_new_admin'])
 admin_keyboard.row(BUTTONS['btn_demote_from_admin']).row(BUTTONS['btn_block_user'])
+
 
 # check if user is admin
 def is_admin(id):
@@ -53,6 +54,7 @@ def is_admin(id):
         return True if fetch else False
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
+
 
 # creating a decorator to disallow access to bot for blocked users
 def not_blocked_access():
@@ -76,11 +78,13 @@ def not_blocked_access():
                 bot.reply_to(message, f"Oops! I encountered some error.\nTry again later🙃")
             else:
                 conn.close()
+
         return f_restrict
+
     return deco_resctrict
 
 
-#TODO: /start - say hi to the bot👋
+# TODO: /start - say hi to the bot👋
 @bot.message_handler(commands=['start'])
 @not_blocked_access()
 def start(message):
@@ -115,7 +119,7 @@ def start(message):
                              reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
-        bot.reply_to(message,  f"Oops! I encountered some error.\nTry again later🙃")
+        bot.reply_to(message, f"Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
 
@@ -174,12 +178,13 @@ def show_all_notif(message):
         for row in all_notif:
             text += f'{row[0]}:\n  {row[1]}\n'
         bot.send_message(message.from_user.id, text,
-                         reply_markup=admin_keyboard if is_admin(message.chat_id) else user_keyboard)
+                         reply_markup=admin_keyboard if is_admin(message.chat.id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
+
 
 # TODO: /create_notif - create new notification📝
 @bot.message_handler(commands=['create_notif'])
@@ -192,6 +197,7 @@ def create_notif(message):
                      "Enter the time for notification in the following format:\nhh:mm\nExample: 09:30",
                      reply_markup=keyboard)
     bot.register_next_step_handler(message, process_time_step)
+
 
 def process_time_step(message):
     try:
@@ -232,7 +238,8 @@ def process_message_step(message, notif_time):
                          reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
     except Exception as error:
         print(error)
-        bot.reply_to(message,  "Oops! I encountered some error.\nTry again later🙃")
+        bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
+
 
 # TODO: /redact_notif - redact notification in the database✍️
 @bot.message_handler(commands=['redact_notif'])
@@ -266,6 +273,7 @@ def redact_notif(message):
     else:
         conn.close()
 
+
 def process_notif_step(message):
     try:
         if message.text == 'Cancel':
@@ -290,6 +298,7 @@ def process_notif_step(message):
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
 
+
 def process_redact_notif_step(message, notif_time):
     try:
         column_to_redact = message.text.lower()
@@ -312,7 +321,7 @@ def process_redact_notif_step(message, notif_time):
             bot.send_message(message.chat.id,
                              "Enter new message for the notification.\n"
                              "Maximum length is 255 characters, but it's better to keep it short.",
-                           reply_markup=keyboard)
+                             reply_markup=keyboard)
             bot.register_next_step_handler(message, process_redact_message_step, notif_time)
     except Exception as error:
         print(error)
@@ -345,6 +354,7 @@ def process_redact_time_step(message, notif_time):
         bot.reply_to(message.chat.id, "Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
+
 
 def process_redact_message_step(message, notif_time):
     try:
@@ -456,6 +466,7 @@ def all_users(message):
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
 
+
 # TODO: /set_new_admin - set user as admin
 @bot.message_handler(commands=['set_new_admin'])
 @not_blocked_access()
@@ -491,6 +502,7 @@ def set_new_admin(message):
         bot.clear_step_handler(message)
     else:
         conn.close()
+
 
 def process_check_user_step(message):
     try:
@@ -560,6 +572,7 @@ def demote_from_admin(message):
     else:
         conn.close()
 
+
 def process_check_admin_step(message):
     try:
         chat_id = message.chat.id
@@ -584,12 +597,14 @@ def process_check_admin_step(message):
         conn.commit()
         bot.send_message(chat_id, f'User {user_name} was demoted from being an admin!',
                          reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
-        bot.send_message(user_id, 'You was demoted from being an admin!\nCheck /help to see what options were disabled.')
+        bot.send_message(user_id,
+                         'You was demoted from being an admin!\nCheck /help to see what options were disabled.')
     except Exception as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
+
 
 # TODO: /block_user - block user
 @bot.message_handler(commands=['block_user'])
@@ -700,9 +715,10 @@ def help(message):
         bot.send_message(chat_id, text, reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
-        bot.reply_to(message,  f"Oops! I encountered some error.\nTry again later🙃")
+        bot.reply_to(message, f"Oops! I encountered some error.\nTry again later🙃")
     else:
         conn.close()
+
 
 @bot.message_handler(commands=['delete'])
 @not_blocked_access()
@@ -727,14 +743,13 @@ def delete(message):
     else:
         conn.close()
 
+
 @bot.callback_query_handler(func=lambda call: call.data in ['cancel'])
-@not_blocked_access()
 def callback_cancel(call):
     if call.message:
         if call.data == "cancel":
             text = "Cancelled! Nothing was changed or added🙂"
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text,
-                                  reply_markup=admin_keyboard if is_admin(call.message.chat.id) else user_keyboard)
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=text)
             bot.answer_callback_query(callback_query_id=call.id, show_alert=False, text="Cancelled!")
             bot.clear_step_handler(call.message)
 
@@ -768,28 +783,28 @@ def command_default(message):
         block_user(message)
 
 
-logger = telebot.logger
-telebot.logger.setLevel(logging.INFO)
-
-server = Flask(__name__)
-
-
-@server.route(f'/{config.API_KEY}', methods=['POST'])
-def getMessage():
-    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
-
-
-@server.route('/')
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
-    return "?", 200
+# logger = telebot.logger
+# telebot.logger.setLevel(logging.INFO)
+#
+# server = Flask(__name__)
+#
+#
+# @server.route(f'/{config.API_KEY}', methods=['POST'])
+# def getMessage():
+#     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+#     return "!", 200
+#
+#
+# @server.route('/')
+# def webhook():
+#     bot.remove_webhook()
+#     bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
+#     return "?", 200
 
 
 if __name__ == "__main__":
-    # bot.delete_webhook()
+    bot.delete_webhook()
     now = datetime.now()
     current_time = now.strftime("%H:%M")
-    # bot.polling(none_stop=True)
-    server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+    bot.polling(none_stop=True)
+    # server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
