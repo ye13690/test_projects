@@ -3,13 +3,12 @@ import os
 import time
 from datetime import datetime
 from functools import wraps
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 
 # heroku database connected to hobby-dev plan (10 000 rows)
 # to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
 import telebot
+from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request
 
 import config
@@ -722,7 +721,7 @@ def help(message):
         cursor.execute(query, (chat_id,))
         msg = cursor.fetchone()[0]
         text = "This bot is created for practice purpose.🧪\n" \
-               "To interact with the bot you can use following commands that are available in your keyboard below!\n\n"\
+               "To interact with the bot you can use following commands that are available in your keyboard below!\n\n" \
                "/start - say hi to the bot👋\n" \
                "/change_name - change your name in the bot's database🗃\n" \
                "/show_all_notif - show all your notifications📑" \
@@ -814,12 +813,8 @@ telebot.logger.setLevel(logging.INFO)
 
 server = Flask(__name__)
 
-# executors = {
-#     'default': ThreadPoolExecutor(16),
-#     'processpool': ProcessPoolExecutor(4)
-# }
-
 schedule = BackgroundScheduler(daemon=True)
+
 
 @server.route(f'/{config.API_KEY}', methods=['POST'])
 def getMessage():
@@ -859,16 +854,9 @@ def job():
     else:
         conn.close()
 
-schedule.add_job(func=job, trigger='interval', seconds=30)
+
+schedule.add_job(func=job, trigger='interval', seconds=60)
 schedule.start()
 
 if __name__ == "__main__":
-    # bot.delete_webhook()
-    # now = datetime.now()
-    # current_time = now.strftime("%H:%M")
-    # bot.polling(none_stop=True)
     server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
-    # schedule.every(60).seconds.do(job)
-    # while True:
-    #     schedule.run_pending()
-    #     time.sleep(60)
