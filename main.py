@@ -580,11 +580,12 @@ def demote_from_admin(message):
             bot.send_message(chat_id,
                              "Who do you want to demote from being an admin?\nPlease, write their id.",
                              reply_markup=keyboard)
+            bot.register_next_step_handler(message, process_check_admin_step)
+
         else:
             bot.send_message(chat_id,
                              "There is no other admins beside you!",
                              reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
-        bot.register_next_step_handler(message, process_check_admin_step)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -798,13 +799,13 @@ def command_default(message):
         delete(message)
     elif msg == "help":
         help(message)
-    elif msg == "show all users":
+    elif msg == "show all users" and is_admin(message.chat.id):
         all_users(message)
-    elif msg == "set user as admin":
+    elif msg == "set user as admin" and is_admin(message.chat.id):
         set_new_admin(message)
-    elif msg == "demote user from admin":
+    elif msg == "demote user from admin" and is_admin(message.chat.id):
         demote_from_admin(message)
-    elif msg == "block user":
+    elif msg == "block user" and is_admin(message.chat.id):
         block_user(message)
 
 
