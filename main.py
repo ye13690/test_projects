@@ -844,7 +844,7 @@ def job():
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT id, time, message FROM schedule WHERE time=%s"
+        query = "SELECT id_user, time, message FROM schedule WHERE time=%s"
         cursor.execute(query, (current_time,))
         rows = cursor.fetchall()
         print(current_time)
