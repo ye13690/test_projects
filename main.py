@@ -691,7 +691,7 @@ def process_check_user_for_block_step(message):
         query = "DELETE FROM users WHERE id=%s"
         cursor.execute(query, (user_id,))
         conn.commit()
-        query = "INSERT INTO blocked(id) VALUES %s"
+        query = "INSERT INTO blocked(id) VALUES (%s)"
         cursor.execute(query, (user_id,))
         conn.commit()
         bot.send_message(chat_id, f'User {user_id} was blocked!')
