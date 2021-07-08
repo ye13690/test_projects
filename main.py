@@ -7,6 +7,7 @@ from functools import wraps
 # heroku database connected to hobby-dev plan (10 000 rows)
 # to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
+import schedule
 import telebot
 from flask import Flask, request
 
@@ -34,13 +35,16 @@ user_keyboard = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True)
 user_keyboard.row(BUTTONS['btn_start']).row(BUTTONS['btn_change_name']).row(BUTTONS['btn_show_all_notif'])
 user_keyboard.row(BUTTONS['btn_new_notif'], BUTTONS['btn_redact_notif'], BUTTONS['btn_delete_notif'])
 user_keyboard.row(BUTTONS['help']).row(BUTTONS['btn_delete'])
-admin_keyboard = user_keyboard
+admin_keyboard = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True)
+admin_keyboard.row(BUTTONS['btn_start']).row(BUTTONS['btn_change_name']).row(BUTTONS['btn_show_all_notif'])
+admin_keyboard.row(BUTTONS['btn_new_notif'], BUTTONS['btn_redact_notif'], BUTTONS['btn_delete_notif'])
+admin_keyboard.row(BUTTONS['help']).row(BUTTONS['btn_delete'])
 admin_keyboard.row(BUTTONS['btn_all_users']).row(BUTTONS['btn_set_new_admin'])
 admin_keyboard.row(BUTTONS['btn_demote_from_admin']).row(BUTTONS['btn_block_user'])
 
 
 # check if user is admin
-def is_admin(id):
+def is_admin(user_id):
     try:
         conn = psycopg2.connect(
             host=config.HOST,
@@ -49,9 +53,9 @@ def is_admin(id):
             password=config.PASSWORD)
         cursor = conn.cursor()
         query = "SELECT admin FROM users WHERE id = %s"
-        cursor.execute(query, (id,))
-        fetch = cursor.fetchone()
-        return True if fetch else False
+        cursor.execute(query, (user_id,))
+        fetch = cursor.fetchone()[0]
+        return fetch
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
@@ -69,7 +73,7 @@ def not_blocked_access():
                     user=config.USER,
                     password=config.PASSWORD)
                 cursor = conn.cursor()
-                query = "SELECT id, username FROM blocked WHERE id = %s"
+                query = "SELECT id FROM blocked WHERE id = %s"
                 cursor.execute(query, (user_id,))
                 if not cursor.fetchone():
                     return f(message, *args, **kwargs)
@@ -96,12 +100,13 @@ def start(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = f"SELECT name, admin FROM users WHERE id={chat_id}"
-        cursor.execute(query)
+        query = "SELECT name, admin FROM users WHERE id=%s"
+        cursor.execute(query, (chat_id,))
         user = cursor.fetchone()
         if not user:
             query = "INSERT INTO users(id, name, username, admin) VALUES (%s, %s, %s, %s)"
-            cursor.execute(query, (chat_id, name, message.from_user.username, 'f'))
+            cursor.execute(query,
+                           (chat_id, name, message.from_user.username if message.from_user.username else '---', 'f'))
             conn.commit()
             bot.send_message(chat_id, f"Hi, {name}👋\nI'm random bot, nice to meet you!")
             help(message)
@@ -111,8 +116,8 @@ def start(message):
             rows = cursor.fetchall()
             for row in rows:
                 bot.send_message(row[0],
-                                 f"New user!\nId: {chat_id}\nFull name: {message.from_user.first_name} {message.from_user.last_name}\n"
-                                 f"Username: @{message.from_user.username}\n\n"
+                                 f"New user!\nId: {chat_id}\n"
+                                 f"Full name: {message.from_user.first_name} {message.from_user.last_name}\n"
                                  f"Currently there are {all_users} users (non-admin)")
         else:
             bot.send_message(chat_id, f"Hi, {user[0]}👋\nLong time no see.",
@@ -144,8 +149,8 @@ def process_name_step(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = f"SELECT name FROM users WHERE id={chat_id}"
-        cursor.execute(query)
+        query = "SELECT name FROM users WHERE id=%s"
+        cursor.execute(query, (chat_id,))
         old_name = cursor.fetchone()[0]
         new_name = message.text.strip()
         query = "UPDATE users SET name=%s WHERE id=%s"
@@ -175,8 +180,11 @@ def show_all_notif(message):
         cursor.execute(query, (message.chat.id,))
         all_notif = cursor.fetchall()
         text = ''
-        for row in all_notif:
-            text += f'{row[0]}:\n  {row[1]}\n'
+        if all_notif:
+            for row in all_notif:
+                text += f'{row[0]}:\n  {row[1]}\n'
+        else:
+            text = "You don't have any notifications yet!"
         bot.send_message(message.from_user.id, text,
                          reply_markup=admin_keyboard if is_admin(message.chat.id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
@@ -259,14 +267,18 @@ def redact_notif(message):
         query = "SELECT time, message FROM schedule WHERE id_user=%s ORDER BY time ASC"
         cursor.execute(query, (message.chat.id,))
         all_notif = cursor.fetchall()
-        for notif in all_notif:
-            keyboard_notif.row(
-                telebot.types.KeyboardButton(f'{notif[0]} -> {notif[1]}'),
-            )
-        bot.send_message(message.from_user.id,
-                         "Which notification do you want to redact?",
-                         reply_markup=keyboard_notif)
-        bot.register_next_step_handler(message, process_notif_step)
+        if all_notif:
+            for notif in all_notif:
+                keyboard_notif.row(
+                    telebot.types.KeyboardButton(f'{notif[0]} -> {notif[1]}'),
+                )
+            bot.send_message(message.from_user.id,
+                             "Which notification do you want to redact?",
+                             reply_markup=keyboard_notif)
+            bot.register_next_step_handler(message, process_notif_step)
+        else:
+            bot.send_message(message.from_user.id, "You don't have any notifications to redact!",
+                             reply_markup=admin_keyboard if is_admin(message.from_user.id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -330,7 +342,6 @@ def process_redact_notif_step(message, notif_time):
 
 def process_redact_time_step(message, notif_time):
     try:
-        print('notif_time', notif_time, message.text.strip())
         chat_id = message.chat.id
         new_time = message.text.strip()
         time.strptime(new_time, '%H:%M')
@@ -396,14 +407,19 @@ def delete_notif(message):
         query = "SELECT time, message FROM schedule WHERE id_user=%s ORDER BY time ASC"
         cursor.execute(query, (message.chat.id,))
         all_notif = cursor.fetchall()
-        for notif in all_notif:
-            keyboard_notif.row(
-                telebot.types.KeyboardButton(f'{notif[0]} -> {notif[1]}'),
-            )
-        bot.send_message(message.from_user.id,
-                         "Which notification do you want to delete?",
-                         reply_markup=keyboard_notif)
-        bot.register_next_step_handler(message, process_delete_step)
+        if all_notif:
+            for notif in all_notif:
+                keyboard_notif.row(
+                    telebot.types.KeyboardButton(f'{notif[0]} -> {notif[1]}'),
+                )
+            bot.send_message(message.from_user.id,
+                             "Which notification do you want to delete?",
+                             reply_markup=keyboard_notif)
+            bot.register_next_step_handler(message, process_delete_step)
+        else:
+            bot.send_message(message.from_user.id,
+                             "You don't have any notifications!",
+                             reply_markup=admin_keyboard if is_admin(message.from_user.id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -449,15 +465,16 @@ def all_users(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT name, username, admin FROM users WHERE id != %s"
-        cursor.execute(query, (chat_id))
+        query = "SELECT id, name, username, admin FROM users WHERE id != %s"
+        cursor.execute(query, (chat_id,))
         users_list = ''
         admin_list = ''
         for row in cursor.fetchall():
-            if row[2]:
-                admin_list += f'@{row[1]} : {row[0]}\n'
+            print(row[3])
+            if row[3]:
+                admin_list += f'id: {row[0]} : {row[1]} : @{row[2]}\n'
             else:
-                users_list += f'@{row[1]} : {row[0]}\n'
+                users_list += f'{row[0]} : {row[1]} : @{row[2]}\n'
         text = f'Admins:\n{admin_list}\nUsers:\n{users_list}'
         split_text = telebot.util.smart_split(text)
         for msg in split_text:
@@ -473,8 +490,7 @@ def all_users(message):
 def set_new_admin(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(
-        telebot.types.KeyboardButton('Cancel')
-    )
+        telebot.types.InlineKeyboardButton('Cancel', callback_data='cancel'))
     try:
         chat_id = message.chat.id
         conn = psycopg2.connect(
@@ -483,17 +499,16 @@ def set_new_admin(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT name, username FROM users WHERE id != %s AND admin=FALSE"
-        cursor.execute(query, (chat_id))
+        query = "SELECT id, name, username FROM users WHERE id != %s AND admin=FALSE"
+        cursor.execute(query, (chat_id,))
         text = 'All users:\n'
         for row in cursor.fetchall():
-            text += f'@{row[1]} : {row[0]}\n'
+            text += f'id: {row[0]} : {row[1]} : @{row[2]}\n'
         split_text = telebot.util.smart_split(text)
         for msg in split_text:
             bot.send_message(chat_id, msg)
         bot.send_message(chat_id,
-                         "Who do you want to set as new admin?\nPlease, write their username.\n\n"
-                         "Example: without_point_bot",
+                         "Who do you want to set as new admin?\nPlease, write their Id.",
                          reply_markup=keyboard)
         bot.register_next_step_handler(message, process_check_user_step)
     except (Exception, psycopg2.DatabaseError) as error:
@@ -507,28 +522,29 @@ def set_new_admin(message):
 def process_check_user_step(message):
     try:
         chat_id = message.chat.id
-        user_name = message.text.strip()
+        user_id = message.text.strip()
         conn = psycopg2.connect(
             host=config.HOST,
             database=config.DATABASE,
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(query, (user_name))
+        query = "SELECT * FROM users WHERE id = %s"
+        cursor.execute(query, (user_id,))
         user_id = cursor.fetchone()[0]
         if not cursor:
-            msg = bot.reply_to(message, f"Couldn't find {user_name} in the database.\n"
-                                        f"Check the username and try again, please.")
+            msg = bot.reply_to(message, f"Couldn't find {user_id} in the database.\n"
+                                        f"Check the id and try again, please.")
             bot.register_next_step_handler(msg, process_check_user_step)
             return
 
-        query = "UPDATE users SET admin=TRUE WHERE username=%s"
-        cursor.execute(query, (user_name))
+        query = "UPDATE users SET admin=TRUE WHERE id=%s"
+        cursor.execute(query, (user_id,))
         conn.commit()
-        bot.send_message(chat_id, f'User {user_name} was set as admin!',
+        bot.send_message(chat_id, f'User with id {user_id} was set as admin!',
                          reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
-        bot.send_message(user_id, 'You was set as an admin!\nCheck /help to see what you can do now.')
+        bot.send_message(user_id, 'You was set as an admin!\nCheck /help to see what you can do now.',
+                         reply_markup=admin_keyboard if is_admin(user_id) else user_keyboard)
     except Exception as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -542,8 +558,7 @@ def process_check_user_step(message):
 def demote_from_admin(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(
-        telebot.types.KeyboardButton('Cancel')
-    )
+        telebot.types.InlineKeyboardButton('Cancel', callback_data='cancel'))
     try:
         chat_id = message.chat.id
         conn = psycopg2.connect(
@@ -552,18 +567,23 @@ def demote_from_admin(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT name, username FROM users WHERE id != %s AND admin=TRUE"
-        cursor.execute(query, (chat_id))
+        query = "SELECT id, name, username FROM users WHERE id != %s AND admin=TRUE"
+        cursor.execute(query, (chat_id,))
         text = 'All admins:\n'
-        for row in cursor.fetchall():
-            text += f'@{row[1]} : {row[0]}\n'
-        split_text = telebot.util.smart_split(text)
-        for msg in split_text:
-            bot.send_message(chat_id, msg)
-        bot.send_message(chat_id,
-                         "Who do you want to demote from being an admin?\nPlease, write their username.\n\n"
-                         "Example: without_point_bot",
-                         reply_markup=keyboard)
+        rows = cursor.fetchall()
+        if rows:
+            for row in rows:
+                text += f'id: {row[0]} : {row[1]} : @{row[2]}\n'
+            split_text = telebot.util.smart_split(text)
+            for msg in split_text:
+                bot.send_message(chat_id, msg)
+            bot.send_message(chat_id,
+                             "Who do you want to demote from being an admin?\nPlease, write their id.",
+                             reply_markup=keyboard)
+        else:
+            bot.send_message(chat_id,
+                             "There is no other admins beside you!",
+                             reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
         bot.register_next_step_handler(message, process_check_admin_step)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -576,29 +596,30 @@ def demote_from_admin(message):
 def process_check_admin_step(message):
     try:
         chat_id = message.chat.id
-        user_name = message.text.strip()
+        user_id = message.text.strip()
         conn = psycopg2.connect(
             host=config.HOST,
             database=config.DATABASE,
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(query, (user_name))
+        query = "SELECT * FROM users WHERE id = %s"
+        cursor.execute(query, (user_id,))
         user_id = cursor.fetchone()[0]
         if not cursor:
-            msg = bot.reply_to(message, f"Couldn't find {user_name} in the database.\n"
-                                        f"Check the username and try again, please.")
+            msg = bot.reply_to(message, f"Couldn't find {user_id} in the database.\n"
+                                        f"Check the id and try again, please.")
             bot.register_next_step_handler(msg, process_check_user_step)
             return
 
-        query = "UPDATE users SET admin=TRUE WHERE username=%s"
-        cursor.execute(query, (user_name))
+        query = "UPDATE users SET admin=FALSE WHERE id=%s"
+        cursor.execute(query, (user_id,))
         conn.commit()
-        bot.send_message(chat_id, f'User {user_name} was demoted from being an admin!',
+        bot.send_message(chat_id, f'User with id {user_id} was demoted from being an admin!',
                          reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
         bot.send_message(user_id,
-                         'You was demoted from being an admin!\nCheck /help to see what options were disabled.')
+                         'You was demoted from being an admin!\nCheck /help to see what options were disabled.',
+                         reply_markup=admin_keyboard if is_admin(user_id) else user_keyboard)
     except Exception as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -612,8 +633,7 @@ def process_check_admin_step(message):
 def block_user(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.add(
-        telebot.types.KeyboardButton('Cancel')
-    )
+        telebot.types.InlineKeyboardButton('Cancel', callback_data='cancel'))
     try:
         chat_id = message.chat.id
         conn = psycopg2.connect(
@@ -622,19 +642,24 @@ def block_user(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT name, username FROM users WHERE id != %s"
-        cursor.execute(query, (chat_id))
+        query = "SELECT id, name, username FROM users WHERE id != %s"
+        cursor.execute(query, (chat_id,))
         text = 'All admins:\n'
-        for row in cursor.fetchall():
-            text += f'@{row[1]} : {row[0]}\n'
-        split_text = telebot.util.smart_split(text)
-        for msg in split_text:
-            bot.send_message(chat_id, msg)
-        bot.send_message(chat_id,
-                         "Who do you want to block?\nPlease, write their username.\n\n"
-                         "Example: without_point_bot",
-                         reply_markup=keyboard)
-        bot.register_next_step_handler(message, process_check_user_for_block_step)
+        rows = cursor.fetchall()
+        if rows:
+            for row in rows:
+                text += f'id: {row[0]} : {row[1]} : @{row[2]}\n'
+            split_text = telebot.util.smart_split(text)
+            for msg in split_text:
+                bot.send_message(chat_id, msg)
+            bot.send_message(chat_id,
+                             "Who do you want to block?\nPlease, write their id.",
+                             reply_markup=keyboard)
+            bot.register_next_step_handler(message, process_check_user_for_block_step)
+        else:
+            bot.send_message(chat_id,
+                             "There are no users to block at the moment!",
+                             reply_markup=admin_keyboard if is_admin(chat_id) else user_keyboard)
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         bot.reply_to(message, "Oops! I encountered some error.\nTry again later🙃")
@@ -646,29 +671,29 @@ def block_user(message):
 def process_check_user_for_block_step(message):
     try:
         chat_id = message.chat.id
-        user_name = message.text.strip()
+        user_id = message.text.strip()
         conn = psycopg2.connect(
             host=config.HOST,
             database=config.DATABASE,
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(query, (user_name))
+        query = "SELECT * FROM users WHERE id=%s"
+        cursor.execute(query, (user_id,))
         user_id = cursor.fetchone()[0]
         if not cursor:
-            msg = bot.reply_to(message, f"Couldn't find {user_name} in the database.\n"
-                                        f"Check the username and try again, please.")
+            msg = bot.reply_to(message, f"Couldn't find {user_id} in the database.\n"
+                                        f"Check the id and try again, please.")
             bot.register_next_step_handler(msg, process_check_user_step)
             return
 
-        query = "DELETE FROM users WHERE username=%s"
-        cursor.execute(query, (user_name,))
+        query = "DELETE FROM users WHERE id=%s"
+        cursor.execute(query, (user_id,))
         conn.commit()
-        query = "INSERT INTO blocked(id, username) VALUES %s, %s"
-        cursor.execute(query, (user_id, user_name))
+        query = "INSERT INTO blocked(id) VALUES %s"
+        cursor.execute(query, (user_id,))
         conn.commit()
-        bot.send_message(chat_id, f'User {user_name} was blocked!')
+        bot.send_message(chat_id, f'User {user_id} was blocked!')
         bot.send_message(user_id,
                          "You was blocked by one of admins!Now you can't use this bot.\n"
                          "Your messages from now on will be ignored.",
@@ -692,11 +717,11 @@ def help(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = f"SELECT admin FROM users WHERE id={chat_id}"
-        cursor.execute(query)
+        query = "SELECT admin FROM users WHERE id=%s"
+        cursor.execute(query, (chat_id,))
         msg = cursor.fetchone()[0]
         text = "This bot is created for practice purpose.🧪\n" \
-               "To interact with the bot you can use following commands that are available in your keyboard below!\n\n" \
+               "To interact with the bot you can use following commands that are available in your keyboard below!\n\n"\
                "/start - say hi to the bot👋\n" \
                "/change_name - change your name in the bot's database🗃\n" \
                "/show_all_notif - show all your notifications📑" \
@@ -731,8 +756,8 @@ def delete(message):
             user=config.USER,
             password=config.PASSWORD)
         cursor = conn.cursor()
-        query = f"DELETE FROM users WHERE id={chat_id}"
-        cursor.execute(query)
+        query = "DELETE FROM users WHERE id=%s"
+        cursor.execute(query, (chat_id,))
         conn.commit()
         bot.send_message(chat_id, f"Your info was deleted from the database😐\n"
                                   f"You won't receive any notifications in future.",
@@ -783,28 +808,62 @@ def command_default(message):
         block_user(message)
 
 
-# logger = telebot.logger
-# telebot.logger.setLevel(logging.INFO)
-#
-# server = Flask(__name__)
-#
-#
-# @server.route(f'/{config.API_KEY}', methods=['POST'])
-# def getMessage():
-#     bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-#     return "!", 200
-#
-#
-# @server.route('/')
-# def webhook():
-#     bot.remove_webhook()
-#     bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
-#     return "?", 200
+logger = telebot.logger
+telebot.logger.setLevel(logging.INFO)
+
+server = Flask(__name__)
+
+
+@server.route(f'/{config.API_KEY}', methods=['POST'])
+def getMessage():
+    bot.process_new_updates([telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    return "!", 200
+
+
+@server.route('/')
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
+    return "?", 200
+
+
+def send_notif(user_id, msg):
+    bot.send_message(user_id, msg)
+
+
+def job():
+    try:
+        now = datetime.now()
+        current_time = now.strftime("%H:%M")
+        conn = psycopg2.connect(
+            host=config.HOST,
+            database=config.DATABASE,
+            user=config.USER,
+            password=config.PASSWORD)
+        cursor = conn.cursor()
+        query = "SELECT id, time, message FROM schedule WHERE time=%s"
+        cursor.execute(query, (current_time,))
+        rows = cursor.fetchall()
+        print(current_time)
+        if rows:
+            for row in rows:
+                user_id, t, msg = row[0], row[1], row[2]
+                print(row)
+                send_notif(user_id, msg)
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(error)
+    else:
+        conn.close()
 
 
 if __name__ == "__main__":
-    bot.delete_webhook()
-    now = datetime.now()
-    current_time = now.strftime("%H:%M")
-    bot.polling(none_stop=True)
-    # server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+    # bot.delete_webhook()
+    # now = datetime.now()
+    # current_time = now.strftime("%H:%M")
+    # bot.polling(none_stop=True)
+    server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
+    schedule.every(60).seconds.do(job)
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
