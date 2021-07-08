@@ -3,11 +3,12 @@ import os
 import time
 from datetime import datetime
 from functools import wraps
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
 
 # heroku database connected to hobby-dev plan (10 000 rows)
 # to change plan: https://devcenter.heroku.com/articles/updating-heroku-postgres-databases
 import psycopg2
-import schedule
 import telebot
 from flask import Flask, request
 
@@ -813,6 +814,12 @@ telebot.logger.setLevel(logging.INFO)
 
 server = Flask(__name__)
 
+executors = {
+    'default': ThreadPoolExecutor(16),
+    'processpool': ProcessPoolExecutor(4)
+}
+
+schedule = BackgroundScheduler(timezone='Europe/Helsinki', executors=executors)
 
 @server.route(f'/{config.API_KEY}', methods=['POST'])
 def getMessage():
@@ -825,10 +832,6 @@ def webhook():
     bot.remove_webhook()
     bot.set_webhook(url=f'https://telegrambotproject7.herokuapp.com/{config.API_KEY}')
     return "?", 200
-
-
-def send_notif(user_id, msg):
-    bot.send_message(user_id, msg)
 
 
 def job():
@@ -849,21 +852,23 @@ def job():
             for row in rows:
                 user_id, t, msg = row[0], row[1], row[2]
                 print(row)
-                send_notif(user_id, msg)
+                bot.send_message(user_id, msg)
 
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
     else:
         conn.close()
 
+schedule.add_job(job, 'interval', seconds=60)
 
 if __name__ == "__main__":
     # bot.delete_webhook()
     # now = datetime.now()
     # current_time = now.strftime("%H:%M")
     # bot.polling(none_stop=True)
+    schedule.start()
     server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
-    schedule.every(60).seconds.do(job)
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    # schedule.every(60).seconds.do(job)
+    # while True:
+    #     schedule.run_pending()
+    #     time.sleep(60)
