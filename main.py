@@ -814,12 +814,12 @@ telebot.logger.setLevel(logging.INFO)
 
 server = Flask(__name__)
 
-executors = {
-    'default': ThreadPoolExecutor(16),
-    'processpool': ProcessPoolExecutor(4)
-}
+# executors = {
+#     'default': ThreadPoolExecutor(16),
+#     'processpool': ProcessPoolExecutor(4)
+# }
 
-schedule = BackgroundScheduler(timezone='Europe/Helsinki', executors=executors)
+schedule = BackgroundScheduler(daemon=True)
 
 @server.route(f'/{config.API_KEY}', methods=['POST'])
 def getMessage():
@@ -859,14 +859,14 @@ def job():
     else:
         conn.close()
 
-schedule.add_job(job, 'interval', seconds=60)
+schedule.add_job(func=job, trigger='interval', seconds=30)
+schedule.start()
 
 if __name__ == "__main__":
     # bot.delete_webhook()
     # now = datetime.now()
     # current_time = now.strftime("%H:%M")
     # bot.polling(none_stop=True)
-    schedule.start()
     server.run(host='0.0.0.0', port=os.environ.get('PORT', 5000))
     # schedule.every(60).seconds.do(job)
     # while True:
