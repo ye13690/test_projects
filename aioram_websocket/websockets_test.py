@@ -6,9 +6,8 @@ import websockets
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from aiogram.types import BotCommand
-from aiogram.dispatcher.filters import Filter
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import BotCommand
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from requests import Session
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
@@ -63,6 +62,7 @@ dp = Dispatcher(bot, storage=MemoryStorage())
 loop = asyncio.get_event_loop()
 monitoring_task = None
 
+
 async def set_commands(bot: Bot):
     commands = [
         BotCommand(command="/start", description="Say hi to the bot"),
@@ -71,7 +71,6 @@ async def set_commands(bot: Bot):
         BotCommand(command="/help", description="Help")
     ]
     await bot.set_my_commands(commands)
-
 
 
 BUTTONS = {
@@ -112,6 +111,7 @@ class RedactStates(StatesGroup):
     redact_name = State()
     redact_phone = State()
 
+
 class AdminStates(StatesGroup):
     start_changing_type = State()
     changing_user_type = State()
@@ -137,6 +137,7 @@ async def get_type(chat_id):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         await bot.send_message(chat_id, "Oops! I encountered some error.\nTry again later🙃")
+
 
 async def decide_keyboard(chat_id):
     """
@@ -386,6 +387,7 @@ async def stop_monitoring(message: types.Message):
     monitoring_task.cancel()
     await message.answer("Stopped monitoring!\nPress button to start monitoring.", reply_markup=general_kb)
 
+
 @dp.message_handler(lambda message: (message.text.lower() == 'change user type'))
 @dp.message_handler(commands=['change_user_type'])
 async def change_user_type(message: types.Message):
@@ -416,6 +418,7 @@ async def change_user_type(message: types.Message):
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
         await message.answer("Oops! I encountered some error.\nTry again later🙃")
+
 
 @dp.message_handler(state=AdminStates.start_changing_type, content_types=['text'])
 async def process_admin_change_invalid_id(message: types.Message, state: FSMContext):
