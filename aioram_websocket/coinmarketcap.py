@@ -6,7 +6,7 @@ import websockets
 from requests import Session
 from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
 
-from telebot.pyTelegramBotAPI import config
+import config
 
 bot = telebot.AsyncTeleBot(config.API_KEY)
 # task = bot.get_me()
